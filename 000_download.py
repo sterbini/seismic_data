@@ -4,26 +4,36 @@ from obspy.clients.fdsn import RoutingClient, Client
 from obspy import UTCDateTime, Stream
 import pathlib
 
-# --- PARAMETRI UTENTE ---
+# --- USER PARAMETERS ---
 LAT, LON = 46.234233, 6.055018   # CERN approx
 MAXRADIUS_DEG = 0.01  
 start = UTCDateTime("2025-07-29T23:24:00")   # <-- UTC
+#start = UTCDateTime("2025-07-30T00:10:00")   # <-- UTC
+
 duration_sec = 180 * 60
+#duration_sec = 3 * 60
+
 end = start + duration_sec
 CHANNELS = "HH?,BH?,EH?"
 
 # %%
-# --- CLIENT: routing per scoprire le stazioni ---
+# --- CLIENT: routing to discover stations ---
 rc = RoutingClient("eida-routing")
 
 inventory = rc.get_stations(
     latitude=LAT, longitude=LON, maxradius=MAXRADIUS_DEG,
     channel=CHANNELS, level="response"
 )
-print(f"Trovate {sum(len(net) for net in inventory)} stazioni.")
+print(f"Found {sum(len(net) for net in inventory)} stations.")
 
-# Provider FDSN in fallback (i più probabili per l'area Ginevra)
-PROVIDERS = ["RESIF", "ETH", "ORFEUS", "INGV", "GFZ", "ODC"]
+# FDSN providers fallback (the most likely for the Geneva area)
+PROVIDERS = [#"RESIF", 
+             "ETH",
+             #"ORFEUS", 
+             #"INGV",
+             #"GFZ",
+             #"ODC",
+             ]   
 
 clients = []
 for prov in PROVIDERS:
@@ -41,14 +51,14 @@ def try_get_waveforms(net_code, sta_code):
                 network=net_code, station=sta_code, location="*",
                 channel=CHANNELS, starttime=start, endtime=end
             )
-            print(f"Scaricati da {c.base_url}: {net_code}.{sta_code}")
+            print(f"Downloaded from {c.base_url}: {net_code}.{sta_code}")
             return wf
         except Exception as e:
             last_err = e
-            # prova prossimo provider
-    raise last_err if last_err else RuntimeError("Nessun provider disponibile.")
+            # try next provider
+    raise last_err if last_err else RuntimeError("No provider available.")
 
-# --- scarico con fallback ---
+# --- download with fallback ---
 st = Stream()
 for net in inventory:
     for sta in net:
@@ -59,31 +69,78 @@ for net in inventory:
             print(f"Fail {net.code}.{sta.code}: {e}")
 
 if len(st) == 0:
-    raise RuntimeError("Nessun dato scaricato: prova ad allargare raggio, cambiare orario o provider.")
+    raise RuntimeError("No data downloaded: try enlarging radius, changing time or provider.")
 
-# --- pulizia & risposta strumentale ---
-st.merge(method=1, fill_value="interpolate")
-st.detrend("linear")
-st.taper(max_percentage=0.01)
+# --- cleaning & instrument response ---
+#st.merge(method=1, fill_value="interpolate")
+#st.detrend("linear")
+#st.taper(max_percentage=0.01)
 
-pre_filt = (0.05, 0.08, 40.0, 45.0)  # da adattare al sampling reale
+pre_filt = (0.01, 0.02, 40.0, 45.0)  # adapt to actual sampling
 try:
-     st.remove_response(inventory=inventory, pre_filt=pre_filt, output="VEL",
-                        zero_mean=True, taper=True)
-     print("Risposta strumentale rimossa (output=VEL).")
+     st.remove_response(inventory=inventory, 
+                        pre_filt=pre_filt,
+                        output="VEL",  # VEL, DISPL
+                        #zero_mean=True,
+                        #taper=True
+                        )
+     print("Instrument response removed (output=VEL).")
 except Exception as e:
-     print(f"Rimozione risposta: {e}")
+     print(f"Response removal: {e}")
 
-# --- salvataggio ---
+# --- saving ---
 out_dir = pathlib.Path("seismo_cern")
 out_dir.mkdir(exist_ok=True)
 mseed_path = out_dir / f"waveforms_{start.date}T{start.time.strftime('%H%M%S')}_UTC_30min.mseed"
 st.write(str(mseed_path), format="MSEED")
-print(f"Dati salvati in: {mseed_path}")
+print(f"Data saved to: {mseed_path}")
 
-# --- grafico rapido ---
+
+# Converti in micrometri
+for tr in st:
+     tr.data *= 1e6
+#     print(tr.id, tr.data[:10], " [µm]")
+
+# --- quick plot ---
 try:
     st.plot(size=(1000, 800))
 except Exception as e:
-    print(f"Nessun backend grafico disponibile: {e}")
+    print(f"No graphical backend available: {e}")
+
+# %%
+from matplotlib import pyplot as plt
+for tr in [st[1], st[0],st[2]]:  # reverse order
+     plt.plot(tr.times(), tr.data)
+     
+plt.title('CERN Seismic Network 2025-07-29 23h24 UTC (+180 min), P1 UL16')
+plt.xlabel('Time [s]')
+plt.ylabel('Velocity [µm/s]')
+plt.legend([tr.id for tr in [st[1], st[0],st[2]]])
+
+
+# # %%
+# velocity= st[2].data
+# time= st[2].times()
+# # plot velocity
+# plt.figure()
+# plt.plot(time, velocity)
+# plt.title('Velocity')
+# plt.xlabel('Time [s]')
+# plt.ylabel('Velocity [µm/s]')
+# plt.grid()
+# #plt.plot(time,200*np.cos(0.2*time))  # example of a sine wave
+# # compute of displacement by integrating velocity
+# # %%
+# import numpy as np
+# displacement = np.cumsum(velocity) * (time[1] - time[0
+# ])  # simple cumulative sum integration
+# # plot displacement
+# plt.figure()
+# plt.plot(time, displacement)
+# plt.title('Displacement from Velocity')
+# plt.xlabel('Time [s]')
+# plt.ylabel('Displacement [µm]')
+# plt.grid()
+# #plt.plot(time,200/0.2*np.sin(0.2*time))  # example of a sine wave
+
 # %%

@@ -1,1 +1,5 @@
 seismo_cern/waveforms_2025-07-29T232400_UTC_30min.mseed
+seismo_cern/waveforms_2025-07-30T000000_UTC_30min.mseed
+seismo_cern/waveforms_2025-07-30T001000_UTC_30min.mseed
+.gitignore
+seismo_cern/waveforms_2025-07-30T100000_UTC_30min.mseed

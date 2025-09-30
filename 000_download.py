@@ -144,3 +144,40 @@ plt.legend([tr.id for tr in [st[1], st[0],st[2]]])
 # #plt.plot(time,200/0.2*np.sin(0.2*time))  # example of a sine wave
 
 # %%
+def trace_to_dataframe(tr):
+    """
+    Convert an ObsPy Trace to a tidy pandas DataFrame with UTC timestamps.
+    """
+    sr = float(tr.stats.sampling_rate)
+    n = int(tr.stats.npts)
+    # Start time as timezone-aware UTC
+    t0 = pd.Timestamp(tr.stats.starttime.datetime, tz="UTC")
+    # Offsets in seconds -> Timedelta
+    offsets = pd.to_timedelta(np.arange(n) / sr, unit="s")
+    ts = t0 + offsets
+
+    df = pd.DataFrame({
+        "timestamp": ts,                # UTC
+        "value": tr.data.astype(float), # µm/s given your scaling
+        "network": tr.stats.network,
+        "station": tr.stats.station,
+        "location": tr.stats.location,
+        "channel": tr.stats.channel,
+        "sampling_rate_hz": sr
+    })
+    return df
+
+import pandas as pd
+import numpy as np
+df = pd.concat([trace_to_dataframe(tr) for tr in st], ignore_index=True)
+# %%
+df.to_parquet(out_dir / f"waveforms_{start.date}T{start.time.strftime('%H%M%S')}_UTC_30min.parquet")
+
+# %%
+df = pd.read_parquet(out_dir / f"waveforms_{start.date}T{start.time.strftime('%H%M%S')}_UTC_30min.parquet")
+from matplotlib import pyplot as plt
+plt.plot(df['timestamp'], df['value'])
+# %%
+aux = df[df['channel']=='HH3']
+plt.plot(aux['timestamp'], aux['value'])
+# %%

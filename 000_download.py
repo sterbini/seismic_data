@@ -144,6 +144,7 @@ plt.legend([tr.id for tr in [st[1], st[0],st[2]]])
 # #plt.plot(time,200/0.2*np.sin(0.2*time))  # example of a sine wave
 
 # %%
+import pandas as pd
 def trace_to_dataframe(tr):
     """
     Convert an ObsPy Trace to a tidy pandas DataFrame with UTC timestamps.
@@ -176,7 +177,6 @@ df.to_parquet(out_dir / f"waveforms_{start.date}T{start.time.strftime('%H%M%S')}
 # %%
 df = pd.read_parquet(out_dir / f"waveforms_{start.date}T{start.time.strftime('%H%M%S')}_UTC_30min.parquet")
 from matplotlib import pyplot as plt
-plt.plot(df['timestamp'], df['value'])
 # %%
 aux = df[df['channel']=='HH3']
 plt.plot(aux['timestamp'], aux['value'])
